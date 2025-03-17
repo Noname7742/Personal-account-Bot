@@ -1,0 +1,233 @@
+import os
+import discord
+from discord import app_commands
+import datetime
+import os
+from dotenv import load_dotenv
+import schedule
+import time
+import sqlite3
+import asyncio
+
+from myserver import server_on
+
+load_dotenv()
+
+intents = discord.Intents.default()
+client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client)
+
+DATABASE_FILE = "my_database.db"
+
+try:
+    conn = sqlite3.connect(DATABASE_FILE)
+    c = conn.cursor()
+except sqlite3.DatabaseError as e:
+    print(f"เกิดข้อผิดพลาด: {e}")
+except FileNotFoundError:
+    print(f"ไม่พบไฟล์: {DATABASE_FILE}")
+
+def create_table():
+    try:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT,
+                amount REAL,
+                description TEXT,
+                date TEXT,
+                image_path TEXT
+            )
+        """)
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"เกิดข้อผิดพลาด: {e}")
+
+def add_transaction(transaction):
+    try:
+        c.execute("INSERT INTO transactions (type, amount, description, date, image_path) VALUES (?, ?, ?, ?, ?)",
+                  (transaction["type"], transaction["amount"], transaction["description"], transaction["date"], transaction["image_path"]))
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"เกิดข้อผิดพลาด: {e}")
+
+def get_transactions():
+    try:
+        c.execute("SELECT * FROM transactions")
+        rows = c.fetchall()
+        transactions = []
+        for row in rows:
+            if len(row) >= 5:  # ตรวจสอบว่ามีอย่างน้อย 5 คอลัมน์
+                transaction = {
+                    "id": row[0],
+                    "type": row[1],
+                    "amount": row[2],
+                    "description": row[3],
+                    "date": row[4]
+                }
+                if len(row) >= 6:  # ตรวจสอบว่ามีคอลัมน์ image_path
+                    transaction["image_path"] = row[5]
+                else:
+                    transaction["image_path"] = None  # กำหนด image_path เป็น None ถ้าไม่มีข้อมูล
+                transactions.append(transaction)
+            else:
+                print(f"พบแถวข้อมูลที่ไม่ถูกต้อง: {row}")
+        return transactions
+    except sqlite3.Error as e:
+        print(f"เกิดข้อผิดพลาด: {e}")
+        return []
+
+create_table()
+
+@client.event
+async def on_ready():
+    await tree.sync()
+    print(f'{client.user} is ready!')
+    schedule.every().day.at("00:00").do(send_daily_summary)
+    client.loop.create_task(run_schedule())
+
+async def run_schedule():
+    while True:
+        schedule.run_pending()
+        await asyncio.sleep(1)
+
+async def send_daily_summary():
+    now = datetime.datetime.now()
+    start_date = now.replace(hour=0, minute=0, second=0, microsecond=0) - datetime.timedelta(days=1)
+    end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    transactions = get_transactions()
+    filtered_transactions = [t for t in transactions if start_date <= datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") < end_date]
+    total_income = sum(t["amount"] for t in filtered_transactions if t["type"] == "income")
+    total_expenses = sum(t["amount"] for t in filtered_transactions if t["type"] == "expenses")
+    balance = total_income - total_expenses
+
+    channel = client.get_channel(1351031050301739070)
+    if channel:
+        await channel.send(f"สรุปรายรับ-รายจ่ายประจำวัน:\n"
+                            f"รายรับ: {total_income} บาท\n"
+                            f"รายจ่าย: {total_expenses} บาท\n"
+                            f"คงเหลือ: {balance} บาท")
+    else:
+        print("ไม่พบแชนแนล")
+
+    print_summary({
+        "date": now.date(),
+        "total_income": total_income,
+        "total_expense": total_expenses,
+        "balance": balance,
+        "income_details": [t for t in filtered_transactions if t["type"] == "income"],
+        "expense_details": [t for t in filtered_transactions if t["type"] == "expenses"]
+    })
+
+def print_summary(summary):
+    print(f"วันที่: {summary['date']}")
+    print(f"ยอดรายรับ: {summary['total_income']} บาท")
+    print(f"ยอดรายจ่าย: {summary['total_expense']} บาท")
+    print(f"ยอดคงเหลือ: {summary['balance']} บาท")
+
+    print("\nรายละเอียดรายรับ:")
+    for income in summary["income_details"]:
+        print(f"- {income['description']}: {income['amount']} บาท")
+
+    print("\nรายละเอียดรายจ่าย:")
+    for expense in summary["expense_details"]:
+        print(f"- {expense['description']}: {expense['amount']} บาท")
+
+@tree.command(name="income", description="เพิ่มรายรับ")
+async def income(interaction: discord.Interaction, amount: float, description: str):
+    transaction = {
+        "type": "income",
+        "amount": amount,
+        "description": description,
+        "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "image_path": None
+    }
+    add_transaction(transaction)
+    await interaction.response.send_message(f"เพิ่มรายรับ: {amount} บาท ({description})")
+
+@tree.command(name="expenses", description="เพิ่มรายจ่าย (แนบรูปภาพได้)")
+async def expenses(interaction: discord.Interaction, amount: float, description: str, image: discord.Attachment = None):
+    image_path = None
+    if image:
+        if image.content_type.startswith("image/"):
+            filename = f"images/{image.filename}"
+            await image.save(filename)
+            image_path = filename
+        else:
+            await interaction.response.send_message("ไฟล์ที่อัปโหลดไม่ใช่รูปภาพ")
+            return
+
+    transaction = {
+        "type": "expenses",
+        "amount": amount,
+        "description": description,
+        "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "image_path": image_path
+    }
+    add_transaction(transaction)
+
+    if image and image_path:
+        try:
+            await interaction.response.send_message(f"เพิ่มรายจ่าย: {amount} บาท ({description})", file=image)
+        except Exception as e:
+            print(f"เกิดข้อผิดพลาดในการส่งไฟล์: {e}")
+            await interaction.response.send_message(f"เพิ่มรายจ่าย: {amount} บาท ({description}) (แต่มีปัญหาในการส่งรูปภาพ)")
+    else:
+        await interaction.response.send_message(f"เพิ่มรายจ่าย: {amount} บาท ({description})")
+
+@tree.command(name="summary", description="สรุปรายรับ-รายจ่าย")
+async def summary(interaction: discord.Interaction, period: str):
+    await interaction.response.defer()
+
+    now = datetime.datetime.now()
+    if period == "สัปดาห์":
+        start_date = now - datetime.timedelta(days=7)
+    elif period == "เดือน":
+        start_date = now - datetime.timedelta(days=30)
+    elif period == "ปี":
+        start_date = now - datetime.timedelta(days=365)
+    else:
+        await interaction.followup.send("กรุณาเลือก period: สัปดาห์, เดือน, ปี")
+        return
+
+    transactions = get_transactions()
+    filtered_transactions = [t for t in transactions if datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") >= start_date]
+    total_income = sum(t["amount"] for t in filtered_transactions if t["type"] == "income")
+    total_expenses = sum(t["amount"] for t in filtered_transactions if t["type"] == "expenses")
+    balance = total_income - total_expenses
+
+    summary_message = f"สรุปรายรับ-รายจ่าย ({period}):\n"
+    summary_message += f"รายรับ: {total_income} บาท\n"
+    summary_message += f"รายจ่าย: {total_expenses} บาท\n"
+    summary_message += f"คงเหลือ: {balance} บาท\n\n"
+
+    files = []
+    for expense in filtered_transactions:
+        if expense["type"] == "expenses":
+            summary_message += f"- {expense['description']}: {expense['amount']} บาท"
+            if expense["image_path"]:
+                file = discord.File(expense["image_path"])
+                files.append(file)
+                summary_message += " (มีรูปภาพแนบ)\n"
+            else:
+                summary_message += "\n"
+
+    await interaction.followup.send(summary_message, files=files)
+    
+    transactions = get_transactions()  # ดึงข้อมูลจากฐานข้อมูล
+    filtered_transactions = [t for t in transactions if datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") >= start_date]
+    total_income = sum(t["amount"] for t in filtered_transactions if t["type"] == "income")
+    total_expenses = sum(t["amount"] for t in filtered_transactions if t["type"] == "expenses")
+    balance = total_income - total_expenses
+    
+client.run("MTM1MTAwNDExNzcxOTQ0OTYzMg.GlAfJ9.9NiKbgHLT8SC84cHQ5C66hW_64QuCycv-U1iDI")
+
+server_on()
+
+bot.run(os.getenv('TOKEN'))
+
+# รัน schedule
+while True:
+    schedule.run_pending()
+    time.sleep(1)
