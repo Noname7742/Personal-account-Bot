@@ -221,7 +221,7 @@ async def summary(interaction: discord.Interaction, period: str):
     total_expenses = sum(t["amount"] for t in filtered_transactions if t["type"] == "expenses")
     balance = total_income - total_expenses
     
-client.run("MTM1MTAwNDExNzcxOTQ0OTYzMg.GlAfJ9.9NiKbgHLT8SC84cHQ5C66hW_64QuCycv-U1iDI")
+client.run("TOKEN")
 
 server_on()
 
