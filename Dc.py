@@ -1,4 +1,3 @@
-import os
 import discord
 from discord import app_commands
 import datetime
@@ -9,9 +8,23 @@ import time
 import sqlite3
 import asyncio
 
-from myserver import server_on
+from flask import Flask
+from threading import Thread
 
-load_dotenv()
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def server_on():
+    t = Thread(target=run)
+    t.daemon = True 
+    t.start()
+
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
@@ -220,12 +233,10 @@ async def summary(interaction: discord.Interaction, period: str):
     total_income = sum(t["amount"] for t in filtered_transactions if t["type"] == "income")
     total_expenses = sum(t["amount"] for t in filtered_transactions if t["type"] == "expenses")
     balance = total_income - total_expenses
-    
-client.run("TOKEN")
 
 server_on()
 
-bot.run(os.getenv('TOKEN'))
+client.run(TOKEN)
 
 # รัน schedule
 while True:
