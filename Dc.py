@@ -242,7 +242,7 @@ async def summary(interaction: discord.Interaction, period: str):
 
     user_id = str(interaction.user.id)
     database_name = f"{user_id}.db"
-    transactions = get_transactions(database_name)  
+    transactions = get_transactions(database_name)
 
     filtered_transactions = [t for t in transactions if datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") >= start_date]
     total_income = sum(t["amount"] for t in filtered_transactions if t["type"] == "income")
@@ -253,6 +253,12 @@ async def summary(interaction: discord.Interaction, period: str):
     summary_message += f"รายรับ: {total_income} บาท\n"
     summary_message += f"รายจ่าย: {total_expenses} บาท\n"
     summary_message += f"คงเหลือ: {balance} บาท\n\n"
+
+    summary_message += "รายละเอียด:\n"
+    for transaction in filtered_transactions:
+        summary_message += f"- {transaction['description']}: {transaction['amount']} บาท ({transaction['type']})\n"
+
+    await interaction.followup.send(summary_message)
 
     files = []
     for expense in filtered_transactions:
@@ -267,12 +273,11 @@ async def summary(interaction: discord.Interaction, period: str):
 
     await interaction.followup.send(summary_message, files=files)
     
-    transactions = get_transactions(database_name)  # แก้ไขตรงนี้
+    transactions = get_transactions(database_name)
     filtered_transactions = [t for t in transactions if datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") >= start_date]
     total_income = sum(t["amount"] for t in filtered_transactions if t["type"] == "income")
     total_expenses = sum(t["amount"] for t in filtered_transactions if t["type"] == "expenses")
     balance = total_income - total_expenses
-
 server_on()
 
 client.run(TOKEN)
