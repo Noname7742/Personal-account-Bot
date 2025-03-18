@@ -102,6 +102,28 @@ def get_transactions():
 create_table()
 
 @client.event
+async def on_message(message):
+    if message.content.startswith('!add_data'):
+        user_id = str(message.author.id)  # ใช้ ID ผู้ใช้เป็นชื่อฐานข้อมูล
+        database_name = f"{user_id}.db"
+
+        conn = sqlite3.connect(database_name)
+        c = conn.cursor()
+
+        # สร้างตาราง (ถ้ายังไม่มี)
+        c.execute('''CREATE TABLE IF NOT EXISTS data
+                     (item TEXT)''')
+
+        # เพิ่มข้อมูล
+        item = message.content.split(' ')[1]
+        c.execute("INSERT INTO data (item) VALUES (?)", (item,))
+
+        conn.commit()
+        conn.close()
+
+        await message.channel.send("เพิ่มข้อมูลแล้ว!")
+
+@client.event
 async def on_ready():
     await tree.sync()
     print(f'{client.user} is ready!')
