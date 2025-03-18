@@ -73,10 +73,13 @@ def add_transaction(transaction):
     except sqlite3.Error as e:
         print(f"เกิดข้อผิดพลาด: {e}")
 
-def get_transactions():
+def get_transactions(database_name):
     try:
+        conn = sqlite3.connect(database_name)
+        c = conn.cursor()
         c.execute("SELECT * FROM transactions")
         rows = c.fetchall()
+        conn.close()
         transactions = []
         for row in rows:
             if len(row) >= 5:  # ตรวจสอบว่ามีอย่างน้อย 5 คอลัมน์
@@ -140,7 +143,10 @@ async def send_daily_summary():
     start_date = now.replace(hour=0, minute=0, second=0, microsecond=0) - datetime.timedelta(days=1)
     end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    transactions = get_transactions()
+    user_id = str(client.get_channel(1351031050301739070).guild.owner_id) # ดึง ID เจ้าของเซิร์ฟเวอร์
+    database_name = f"{user_id}.db"
+    transactions = get_transactions(database_name)
+
     filtered_transactions = [t for t in transactions if start_date <= datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") < end_date]
     total_income = sum(t["amount"] for t in filtered_transactions if t["type"] == "income")
     total_expenses = sum(t["amount"] for t in filtered_transactions if t["type"] == "expenses")
@@ -187,7 +193,9 @@ async def income(interaction: discord.Interaction, amount: float, description: s
         "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "image_path": None
     }
-    add_transaction(transaction)
+    user_id = str(interaction.user.id)
+    database_name = f"{user_id}.db"
+    add_transaction(transaction, database_name)
     await interaction.response.send_message(f"เพิ่มรายรับ: {amount} บาท ({description})")
 
 @tree.command(name="expenses", description="เพิ่มรายจ่าย (แนบรูปภาพได้)")
@@ -209,7 +217,9 @@ async def expenses(interaction: discord.Interaction, amount: float, description:
         "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "image_path": image_path
     }
-    add_transaction(transaction)
+    user_id = str(interaction.user.id)
+    database_name = f"{user_id}.db"
+    add_transaction(transaction, database_name)  # เรียกใช้ add_transaction ครั้งเดียว
 
     if image and image_path:
         try:
@@ -235,7 +245,10 @@ async def summary(interaction: discord.Interaction, period: str):
         await interaction.followup.send("กรุณาเลือก period: สัปดาห์, เดือน, ปี")
         return
 
-    transactions = get_transactions()
+    user_id = str(interaction.user.id)
+    database_name = f"{user_id}.db"
+    transactions = get_transactions(database_name)
+
     filtered_transactions = [t for t in transactions if datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") >= start_date]
     total_income = sum(t["amount"] for t in filtered_transactions if t["type"] == "income")
     total_expenses = sum(t["amount"] for t in filtered_transactions if t["type"] == "expenses")
