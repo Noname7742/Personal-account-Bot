@@ -263,20 +263,17 @@ async def summary(interaction: discord.Interaction, period: str):
     for transaction in filtered_transactions:
         summary_message += f"- {transaction['description']}: {transaction['amount']} บาท ({transaction['type']})\n"
 
-    await interaction.followup.send(summary_message)
+    await interaction.followup.send(summary_message)  # ส่งข้อความสรุปเพียงครั้งเดียว
 
     files = []
     for expense in filtered_transactions:
         if expense["type"] == "expenses":
-            summary_message += f"- {expense['description']}: {expense['amount']} บาท"
             if expense["image_path"]:
                 file = discord.File(expense["image_path"])
                 files.append(file)
-                summary_message += " (มีรูปภาพแนบ)\n"
-            else:
-                summary_message += "\n"
 
-    await interaction.followup.send(summary_message, files=files)
+    if files:
+        await interaction.followup.send(files=files)  # ส่งไฟล์ภาพ (ถ้ามี)
     
     transactions = database_name
     filtered_transactions = [t for t in transactions if datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") >= start_date]
