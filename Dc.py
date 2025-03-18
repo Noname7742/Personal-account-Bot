@@ -273,7 +273,7 @@ async def summary(interaction: discord.Interaction, period: str):
 
     await interaction.followup.send(summary_message, files=files)
     
-    transactions = get_transactions(database_name)
+    transactions = database_name
     filtered_transactions = [t for t in transactions if datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") >= start_date]
     total_income = sum(t["amount"] for t in filtered_transactions if t["type"] == "income")
     total_expenses = sum(t["amount"] for t in filtered_transactions if t["type"] == "expenses")
@@ -285,4 +285,4 @@ client.run(TOKEN)
 # รัน schedule
 while True:
     schedule.run_pending()
-    time.sleep(1)
+    time.sleep(1)  
