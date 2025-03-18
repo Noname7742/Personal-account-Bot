@@ -249,7 +249,14 @@ async def summary(interaction: discord.Interaction, period: str):
     database_name = f"{user_id}.db"
     transactions = get_transactions(database_name)
 
+    # พิมพ์ข้อมูลที่ดึงออกมาจากฐานข้อมูล
+    print(f"Transactions: {transactions}")
+
     filtered_transactions = [t for t in transactions if datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") >= start_date]
+    
+    # พิมพ์ข้อมูลที่กรอง
+    print(f"Filtered transactions: {filtered_transactions}")
+
     total_income = sum(t["amount"] for t in filtered_transactions if t["type"] == "income")
     total_expenses = sum(t["amount"] for t in filtered_transactions if t["type"] == "expenses")
     balance = total_income - total_expenses
@@ -263,7 +270,7 @@ async def summary(interaction: discord.Interaction, period: str):
     for transaction in filtered_transactions:
         summary_message += f"- {transaction['description']}: {transaction['amount']} บาท ({transaction['type']})\n"
 
-    await interaction.followup.send(summary_message)  # ส่งข้อความสรุปเพียงครั้งเดียว
+    await interaction.followup.send(summary_message)# ส่งข้อความสรุปเพียงครั้งเดียว
 
     files = []
     for expense in filtered_transactions:
