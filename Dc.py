@@ -270,8 +270,9 @@ async def summary(interaction: discord.Interaction, period: str):
     for transaction in filtered_transactions:
         summary_message += f"- {transaction['description']}: {transaction['amount']} บาท ({transaction['type']})\n"
 
-    await interaction.followup.send(summary_message)# ส่งข้อความสรุปเพียงครั้งเดียว
+    await interaction.followup.send(summary_message)  # ส่งข้อความสรุปเพียงครั้งเดียว
 
+    # ส่งไฟล์ภาพ (ถ้ามี)
     files = []
     for expense in filtered_transactions:
         if expense["type"] == "expenses":
