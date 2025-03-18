@@ -43,31 +43,29 @@ def create_table(database_name):
     try:
         conn = sqlite3.connect(database_name)
         c = conn.cursor()
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                type TEXT,
-                amount REAL,
-                description TEXT,
-                date TEXT,
-                image_path TEXT
-            )
-        """)
+        c.execute("""CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT,
+            amount REAL,
+            description TEXT,
+            date TEXT,
+            image_path TEXT
+        )""")
         conn.commit()
         conn.close()
     except sqlite3.Error as e:
-        print(f"เกิดข้อผิดพลาด: {e}")
+        print(f"เกิดข้อผิดพลาดในการสร้างตาราง: {e}")
 
 def add_transaction(transaction, database_name):
     try:
         conn = sqlite3.connect(database_name)
         c = conn.cursor()
         c.execute("INSERT INTO transactions (type, amount, description, date, image_path) VALUES (?, ?, ?, ?, ?)",
-                  (transaction["type"], transaction["amount"], transaction["description"], transaction["date"], transaction["image_path"]))
+                    (transaction["type"], transaction["amount"], transaction["description"], transaction["date"], transaction["image_path"]))
         conn.commit()
         conn.close()
     except sqlite3.Error as e:
-        print(f"เกิดข้อผิดพลาด: {e}")
+        print(f"เกิดข้อผิดพลาดในการเพิ่มข้อมูล: {e}")
 
 def get_transactions(database_name):
     try:
@@ -82,7 +80,7 @@ def get_transactions(database_name):
                 transaction = {
                     "id": row[0],
                     "type": row[1],
-                    "amount": row[2],
+                    "amount": row[2],   
                     "description": row[3],
                     "date": row[4]
                 }
@@ -137,24 +135,31 @@ async def send_daily_summary():
     start_date = now.replace(hour=0, minute=0, second=0, microsecond=0) - datetime.timedelta(days=1)
     end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    user_id = str(client.get_channel(1351031050301739070).guild.owner_id)  # ดึง ID เจ้าของเซิร์ฟเวอร์
-    database_name = f"{user_id}.db"
-    create_table(database_name)  # สร้างตารางถ้ายังไม่มี
-    transactions = get_transactions(database_name)
+    # เช็คช่องที่ต้องการส่งข้อความ
+    channel_id = 1351031050301739070
+    channel = client.get_channel(channel_id)
 
-    filtered_transactions = [t for t in transactions if start_date <= datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") < end_date]
-    total_income = sum(t["amount"] for t in filtered_transactions if t["type"] == "income")
-    total_expenses = sum(t["amount"] for t in filtered_transactions if t["type"] == "expenses")
-    balance = total_income - total_expenses
-
-    channel = client.get_channel(1351031050301739070)
     if channel:
-        await channel.send(f"สรุปรายรับ-รายจ่ายประจำวัน:\n"
-                            f"รายรับ: {total_income} บาท\n"
-                            f"รายจ่าย: {total_expenses} บาท\n"
-                            f"คงเหลือ: {balance} บาท")
+        user_id = str(channel.guild.owner_id)
+        database_name = f"{user_id}.db"
+        try:
+            create_table(database_name)
+            transactions = get_transactions(database_name)
+
+            filtered_transactions = [t for t in transactions if start_date <= datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") < end_date]
+            total_income = sum(t["amount"] for t in filtered_transactions if t["type"] == "income")
+            total_expenses = sum(t["amount"] for t in filtered_transactions if t["type"] == "expenses")
+            balance = total_income - total_expenses
+
+            # ส่งข้อความสรุปรายการ
+            await channel.send(f"สรุปรายรับ-รายจ่ายประจำวัน:\n"
+                               f"รายรับ: {total_income} บาท\n"
+                               f"รายจ่าย: {total_expenses} บาท\n"
+                               f"คงเหลือ: {balance} บาท")
+        except sqlite3.Error as e:
+            print(f"เกิดข้อผิดพลาดในการทำงานกับฐานข้อมูล: {e}")
     else:
-        print("ไม่พบแชนแนล")
+        print(f"ไม่พบช่อง Discord ที่มี ID: {channel_id}")
 
     print_summary({
         "date": now.date(),
@@ -285,4 +290,4 @@ client.run(TOKEN)
 # รัน schedule
 while True:
     schedule.run_pending()
-    time.sleep(1)  
+    time.sleep(1)
