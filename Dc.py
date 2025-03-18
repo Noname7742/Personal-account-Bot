@@ -28,7 +28,7 @@ def run():
 
 def server_on():
     t = Thread(target=run)
-    t.daemon = True 
+    t.daemon = True
     t.start()
 
 if TOKEN is None:
@@ -39,18 +39,10 @@ intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-DATABASE_FILE = "my_database.db"
-
-try:
-    conn = sqlite3.connect(DATABASE_FILE)
-    c = conn.cursor()
-except sqlite3.DatabaseError as e:
-    print(f"เกิดข้อผิดพลาด: {e}")
-except FileNotFoundError:
-    print(f"ไม่พบไฟล์: {DATABASE_FILE}")
-
-def create_table():
+def create_table(database_name):
     try:
+        conn = sqlite3.connect(database_name)
+        c = conn.cursor()
         c.execute("""
             CREATE TABLE IF NOT EXISTS transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,14 +54,18 @@ def create_table():
             )
         """)
         conn.commit()
+        conn.close()
     except sqlite3.Error as e:
         print(f"เกิดข้อผิดพลาด: {e}")
 
-def add_transaction(transaction):
+def add_transaction(transaction, database_name):
     try:
+        conn = sqlite3.connect(database_name)
+        c = conn.cursor()
         c.execute("INSERT INTO transactions (type, amount, description, date, image_path) VALUES (?, ?, ?, ?, ?)",
                   (transaction["type"], transaction["amount"], transaction["description"], transaction["date"], transaction["image_path"]))
         conn.commit()
+        conn.close()
     except sqlite3.Error as e:
         print(f"เกิดข้อผิดพลาด: {e}")
 
@@ -101,8 +97,6 @@ def get_transactions(database_name):
     except sqlite3.Error as e:
         print(f"เกิดข้อผิดพลาด: {e}")
         return []
-
-create_table()
 
 @client.event
 async def on_message(message):
@@ -143,8 +137,9 @@ async def send_daily_summary():
     start_date = now.replace(hour=0, minute=0, second=0, microsecond=0) - datetime.timedelta(days=1)
     end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    user_id = str(client.get_channel(1351031050301739070).guild.owner_id) # ดึง ID เจ้าของเซิร์ฟเวอร์
+    user_id = str(client.get_channel(1351031050301739070).guild.owner_id)  # ดึง ID เจ้าของเซิร์ฟเวอร์
     database_name = f"{user_id}.db"
+    create_table(database_name)  # สร้างตารางถ้ายังไม่มี
     transactions = get_transactions(database_name)
 
     filtered_transactions = [t for t in transactions if start_date <= datetime.datetime.strptime(t["date"], "%Y-%m-%d %H:%M:%S") < end_date]
